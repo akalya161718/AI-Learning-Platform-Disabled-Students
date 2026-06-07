@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>AI Learning Platform</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+
+<style>
+
+body{
+font-family:Arial;
+margin:0;
+transition:0.8s;
+background:linear-gradient(120deg,#ff9a9e,#fad0c4);
+}
+
+h1{
+text-align:center;
+color:white;
+padding:15px;
+}
+
+.container{
+display:flex;
+}
+
+.left{
+width:30%;
+background:white;
+padding:20px;
+}
+
+.right{
+width:70%;
+background:#f5f7fa;
+padding:20px;
+}
+
+button{
+background:#ff6a88;
+color:white;
+border:none;
+padding:10px;
+margin:5px;
+border-radius:6px;
+cursor:pointer;
+}
+
+button:hover{
+background:#ff3d68;
+}
+
+#textBox{
+background:white;
+padding:20px;
+height:300px;
+overflow:auto;
+border-radius:10px;
+border:1px solid #ddd;
+}
+
+.quiz{
+background:white;
+padding:20px;
+margin-top:20px;
+border-radius:10px;
+border:1px solid #ddd;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>AI Learning Platform</h1>
+
+<div class="container">
+
+<div class="left">
+
+<h3>Student Type</h3>
+
+<select id="studentType" onchange="resetQuiz()">
+
+<option value="blind">Blind</option>
+<option value="hearing">Hearing Impaired</option>
+<option value="slow">Slow Learner</option>
+
+</select>
+
+<br><br>
+
+<input type="file" id="pdfUpload">
+
+<br><br>
+
+<button onclick="loadPDF()">Start Learning</button>
+<button onclick="previousPage()">Previous</button>
+<button onclick="nextPage()">Next</button>
+<button onclick="stopReading()">Stop Reading</button>
+<br><br>
+
+<button onclick="startVoice()">Start Voice Command</button>
+
+</div>
+
+
+<div class="right">
+
+<h2>Lesson</h2>
+
+<div id="textBox">
+Upload PDF to start learning
+</div>
+
+<div class="quiz">
+
+<h2>Quiz</h2>
+
+<div id="quizBox"></div>
+
+<button onclick="submitQuiz()">Submit Quiz</button>
+
+<h3 id="feedback"></h3>
+
+</div>
+
+</div>
+
+</div>
+
+<script>
+
+let pdfDoc=null
+let pageNum=1
+let pdfText=""
+let recognition
+
+// ---------------- Background Color Change ----------------
+
+const colors=[
+"linear-gradient(120deg,#ff9a9e,#fad0c4)",
+"linear-gradient(120deg,#a18cd1,#fbc2eb)",
+"linear-gradient(120deg,#84fab0,#8fd3f4)",
+"linear-gradient(120deg,#f6d365,#fda085)",
+"linear-gradient(120deg,#667eea,#764ba2)"
+]
+
+let colorIndex=0
+
+setInterval(()=>{
+document.body.style.background=colors[colorIndex]
+colorIndex=(colorIndex+1)%colors.length
+},5000)
+
+// ---------------- Speech ----------------
+
+function speak(text){
+
+let type=document.getElementById("studentType").value
+
+if(type=="blind" || type=="slow"){
+
+speechSynthesis.cancel()
+
+let speech=new SpeechSynthesisUtterance(text)
+
+speech.lang="en-US"
+
+speechSynthesis.speak(speech)
+
+}
+
+}
+function stopReading(){
+speechSynthesis.cancel()
+}
+// ---------------- PDF ----------------
+
+function loadPDF(){
+
+let file=document.getElementById("pdfUpload").files[0]
+
+if(!file){
+alert("Upload a PDF first")
+return
+}
+
+let reader=new FileReader()
+
+reader.onload=function(){
+
+let typedarray=new Uint8Array(this.result)
+
+pdfjsLib.getDocument(typedarray).promise.then(function(pdf){
+
+pdfDoc=pdf
+pageNum=1
+showPage(pageNum)
+
+})
+
+}
+
+reader.readAsArrayBuffer(file)
+
+}
+
+function showPage(num){
+
+pdfDoc.getPage(num).then(function(page){
+
+page.getTextContent().then(function(textContent){
+
+let textItems=textContent.items
+let finalText=""
+
+textItems.forEach(item=>{
+finalText+=item.str+" "
+})
+
+pdfText=finalText
+
+document.getElementById("textBox").innerText=finalText
+
+speak(finalText)
+
+setTimeout(()=>{
+speak("Did you understand the lesson?")
+},4000)
+
+generateQuiz()
+
+})
+
+})
+
+}
+
+function nextPage(){
+
+if(pageNum>=pdfDoc.numPages) return
+
+pageNum++
+showPage(pageNum)
+
+}
+
+function previousPage(){
+
+if(pageNum<=1) return
+
+pageNum--
+showPage(pageNum)
+
+}
+
+// ---------------- Quiz ----------------
+
+let quiz=[]
+
+function randomWord(){
+
+let words=pdfText.split(" ").filter(w=>w.length>3)
+
+return words[Math.floor(Math.random()*words.length)] || "Text"
+
+}
+
+function generateQuiz(){
+
+quiz=[
+{
+q:"Which word appears in the lesson?",
+a:[randomWord(),randomWord(),randomWord()],
+c:0
+},
+{
+q:"Which term is mentioned in the PDF?",
+a:[randomWord(),randomWord(),randomWord()],
+c:1
+},
+{
+q:"Which concept belongs to this lesson?",
+a:[randomWord(),randomWord(),randomWord()],
+c:2
+}
+]
+
+showQuiz()
+
+}
+
+function showQuiz(){
+
+let html=""
+
+quiz.forEach((q,i)=>{
+
+html+="<p>"+q.q+"</p>"
+
+q.a.forEach((opt,j)=>{
+
+html+=`<input type="radio" name="q${i}" value="${j}"> ${opt}<br>`
+
+})
+
+})
+
+document.getElementById("quizBox").innerHTML=html
+
+}
+
+function submitQuiz(){
+
+let score=0
+
+quiz.forEach((q,i)=>{
+
+let ans=document.querySelector(`input[name="q${i}"]:checked`)
+
+if(ans && ans.value==q.c){
+score++
+}
+
+})
+
+let msg="Your score is "+score+" out of 3"
+
+if(score==3){
+msg+=" Excellent performance!"
+}
+
+else if(score==2){
+msg+=" Good job, keep learning."
+}
+
+else{
+msg+=" You need more practice."
+}
+
+document.getElementById("feedback").innerText=msg
+
+speak(msg)
+
+}
+
+// ---------------- Voice Commands ----------------
+
+function startVoice(){
+
+const SpeechRecognition=window.SpeechRecognition || window.webkitSpeechRecognition
+
+if(!SpeechRecognition){
+alert("Voice recognition not supported in this browser")
+return
+}
+
+recognition=new SpeechRecognition()
+
+recognition.continuous=true
+recognition.lang="en-US"
+
+recognition.start()
+
+recognition.onresult=function(event){
+
+let cmd=event.results[event.results.length-1][0].transcript.toLowerCase()
+
+console.log("Command:",cmd)
+
+if(cmd.includes("hi")){
+speak("Hello welcome to AI learning platform")
+}
+
+if(cmd.includes("next")){
+nextPage()
+}
+
+if(cmd.includes("previous")){
+previousPage()
+}
+
+if(cmd.includes("repeat")){
+let text=document.getElementById("textBox").innerText
+speak(text)
+}
+
+if(cmd.includes("stop")){
+speechSynthesis.cancel()
+}
+
+if(cmd.includes("quiz")){
+speak("Quiz is available below")
+}
+
+if(cmd.includes("feedback")){
+let fb=document.getElementById("feedback").innerText
+speak(fb)
+}
+
+}
+
+}
+
+// ---------------- Reset ----------------
+
+function resetQuiz(){
+
+quiz=[]
+document.getElementById("quizBox").innerHTML=""
+document.getElementById("feedback").innerText=""
+
+}
+
+</script>
+
+</body>
+</html>
+```
